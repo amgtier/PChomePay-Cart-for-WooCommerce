@@ -109,7 +109,7 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
     {
         global $woocommerce;
 
-        $order_id = 'AW' . date('Ymd') . $order->get_order_number();
+        $order_id = 'AW' . date('YmdHis-') . $order->get_order_number();
         $pay_type = $this->payment_methods;
         $amount = ceil($order->get_total());
         $returnUrl = $this->get_return_url($order);
@@ -198,11 +198,6 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
                 throw new Exception("嘗試使用付款閘道 API 建立訂單時發生錯誤，請聯絡網站管理員。");
             }
 
-            // 減少庫存
-            wc_reduce_stock_levels($order_id);
-            // 清空購物車
-            $woocommerce->cart->empty_cart();
-
             // 更新訂單狀態為等待中 (等待第三方支付網站返回)
             add_post_meta($order_id, '_pchomepay_orderid', $result->order_id);
             $order->update_status('pending', __('Awaiting PChomePay payment', 'woocommerce'));
@@ -221,7 +216,7 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
 
     public function receive_response()
     {
-        usleep(500000);
+        global $woocommerce;
 
         $notify_type = $_REQUEST['notify_type'];
         $notify_message = $_REQUEST['notify_message'];
@@ -245,6 +240,7 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
 
         $order_data = json_decode(str_replace('\"', '"', $notify_message));
         $wc_order_id = substr($order_data->order_id, 10);
+        $wc_order_id = explode("-", $wc_order_id)[1];
         $order = new WC_Order($wc_order_id);
 
         # 紀錄訂單付款方式
@@ -304,6 +300,10 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
             $order->add_order_note($pay_type_note, true);
             $order->update_status('processing');
             $order->payment_complete();
+            // 減少庫存
+            wc_reduce_stock_levels($wc_order_id);
+            // 清空購物車
+            $woocommerce->cart->empty_cart();
         }
 
         echo 'success';
@@ -403,7 +403,7 @@ class WC_Gateway_PChomePay extends WC_Payment_Gateway
 
     private function get_pchomepay_audit_data($wcOrder, $status)
     {
-        $order_id = 'AW' . date_format($wcOrder->get_date_created(), 'Ymd') . $wcOrder->get_id();
+        $order_id = 'AW' . date_format($wcOrder->get_date_created(), 'Ymdhis-') . $wcOrder->get_id();
         $order = $this->client->getPayment($order_id);
 
         $pchomepay_args = [
@@ -641,11 +641,6 @@ class WC_PI_Gateway_PChomePay extends WC_Gateway_PChomePay
                 throw new Exception("嘗試使用付款閘道 API 建立訂單時發生錯誤，請聯絡網站管理員。");
             }
 
-            // 減少庫存
-            wc_reduce_stock_levels($order_id);
-            // 清空購物車
-            $woocommerce->cart->empty_cart();
-
             // 更新訂單狀態為等待中 (等待第三方支付網站返回)
             add_post_meta($order_id, '_pchomepay_orderid', $result->order_id);
             $order->update_status('pending', __('Awaiting PChomePay payment', 'woocommerce'));
@@ -664,10 +659,7 @@ class WC_PI_Gateway_PChomePay extends WC_Gateway_PChomePay
 
     public function receive_response()
     {
-        usleep(500000);
-
-        $notify_type = $_REQUEST['notify_type'];
-        $notify_message = $_REQUEST['notify_message'];
+        global $woocommerce;
 
         $refund_array = ['refund_pending', 'refund_success', 'refund_fail'];
 
@@ -688,6 +680,7 @@ class WC_PI_Gateway_PChomePay extends WC_Gateway_PChomePay
 
         $order_data = json_decode(str_replace('\"', '"', $notify_message));
         $wc_order_id = substr($order_data->order_id, 10);
+        $wc_order_id = explode("-", $wc_order_id)[1];
         $order = new WC_Order($wc_order_id);
 
         # 紀錄訂單付款方式
@@ -718,6 +711,10 @@ class WC_PI_Gateway_PChomePay extends WC_Gateway_PChomePay
             $order->add_order_note($pay_type_note, true);
             $order->update_status('processing');
             $order->payment_complete();
+            // 減少庫存
+            wc_reduce_stock_levels($wc_order_id);
+            // 清空購物車
+            $woocommerce->cart->empty_cart();
         }
 
         echo 'success';
